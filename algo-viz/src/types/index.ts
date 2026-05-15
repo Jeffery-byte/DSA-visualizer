@@ -1,35 +1,36 @@
+// ─── Highlight semantics ──────────────────────────────────────────────────────
 export type HighlightColor =
-  | 'current'
-  | 'visiting'
-  | 'visited'
-  | 'comparing'
-  | 'found'
-  | 'path'
-  | 'sorted'
-  | 'left'
-  | 'right'
-  | 'mid'
-  | 'pivot'
-  | 'dp-current'
-  | 'dp-source'
-  | 'head'
-  | 'tail'
-  | 'swapping'
-  | 'source'
-  | 'target'
-  | 'in-stack'
-  | 'result'
-  | 'excluded';
+  | 'current'    // the element actively being examined
+  | 'visiting'   // in the process of being explored (BFS/DFS frontier)
+  | 'visited'    // already fully processed
+  | 'comparing'  // being compared to another element
+  | 'found'      // search target located
+  | 'path'       // part of a discovered path
+  | 'sorted'     // confirmed in its final sorted position
+  | 'left'       // left pointer / lo boundary
+  | 'right'      // right pointer / hi boundary
+  | 'mid'        // middle pointer in binary search / divide-and-conquer
+  | 'dp-current' // the DP cell currently being filled
+  | 'dp-source'  // a dependency cell used to compute dp-current
+  | 'head'       // head pointer (linked list, slow pointer)
+  | 'tail'       // tail pointer (fast pointer)
+  | 'swapping'   // two elements being swapped
+  | 'source'     // BFS/DFS start cell
+  | 'target'     // destination cell
+  | 'result'     // final answer cell
+  | 'excluded';  // eliminated half (binary search), completed region
 
+// ─── Language support ─────────────────────────────────────────────────────────
 export type Language = 'javascript' | 'typescript' | 'python' | 'java' | 'c';
 
+// ─── Complexity ───────────────────────────────────────────────────────────────
 export interface Complexity {
   time: string;
   space: string;
-  /** Full explanation of why these complexities hold */
   reasoning: string;
 }
 
+// ─── Data-structure highlight types ──────────────────────────────────────────
 export interface CellHighlight {
   index: number;
   color: HighlightColor;
@@ -43,44 +44,16 @@ export interface MatrixHighlight {
   label?: string;
 }
 
+// ─── Tree ─────────────────────────────────────────────────────────────────────
 export interface TreeNode {
   id: number;
   val: number | string;
   left?: TreeNode;
   right?: TreeNode;
-  children?: TreeNode[];
-  highlight?: HighlightColor;
-  x?: number;
-  y?: number;
-}
-
-export interface GraphNode {
-  id: string;
-  label: string;
-  x: number;
-  y: number;
-  highlight?: HighlightColor;
-  distance?: number;
-}
-
-export interface GraphEdge {
-  from: string;
-  to: string;
-  weight?: number;
-  highlight?: HighlightColor;
-  directed?: boolean;
-}
-
-export interface CallStackFrame {
-  id: string;
-  funcName: string;
-  args: Record<string, unknown>;
-  returnValue?: unknown;
-  isActive: boolean;
-  depth: number;
   highlight?: HighlightColor;
 }
 
+// ─── Data-structure state snapshots ──────────────────────────────────────────
 export interface ArrayState {
   id: string;
   label?: string;
@@ -99,18 +72,8 @@ export interface MatrixState {
 export interface TreeState {
   root: TreeNode | null;
   highlights: { id: number; color: HighlightColor }[];
+  /** Node ids currently in the BFS queue */
   queue?: number[];
-  activeEdges?: [number, number][];
-}
-
-export interface GraphState {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
-  distances?: Record<string, number | typeof Infinity>;
-  visited?: string[];
-  queue?: string[];
-  stack?: string[];
-  path?: string[];
 }
 
 export interface DPTableState {
@@ -118,6 +81,7 @@ export interface DPTableState {
   highlights: { row: number; col: number; color: HighlightColor }[];
   rowLabels?: string[];
   colLabels?: string[];
+  /** When true, render as a single horizontal array instead of a 2-D table */
   is1D?: boolean;
   dpArray?: (number | string)[];
 }
@@ -125,6 +89,7 @@ export interface DPTableState {
 export interface HeapState {
   data: number[];
   highlights: CellHighlight[];
+  /** Index from which elements are already sorted (shown in lime green) */
   sortedFrom?: number;
 }
 
@@ -132,20 +97,37 @@ export interface HashMapState {
   entries: { key: string | number; value: string | number; highlight?: HighlightColor }[];
 }
 
+export interface CallStackFrame {
+  id: string;
+  funcName: string;
+  args: Record<string, unknown>;
+  returnValue?: unknown;
+  isActive: boolean;
+  depth: number;
+  highlight?: HighlightColor;
+}
+
+// ─── Frame ────────────────────────────────────────────────────────────────────
+/**
+ * A single execution step.  Every field except `line` and `description` is
+ * optional — only the fields relevant to the current algorithm are populated.
+ */
 export interface Frame {
+  /** Line number in the reference JavaScript code (mapped to other languages via lineMap) */
   line: number;
   description: string;
+  /** Scalar / primitive variable values shown in the description bar */
   variables?: Record<string, unknown>;
   arrays?: ArrayState[];
   matrix?: MatrixState;
   tree?: TreeState;
-  graph?: GraphState;
   dpTable?: DPTableState;
   heap?: HeapState;
   hashmap?: HashMapState;
   callStack?: CallStackFrame[];
 }
 
+// ─── Algorithm registry ───────────────────────────────────────────────────────
 export type AlgorithmCategory =
   | 'arrays'
   | 'searching'
@@ -161,8 +143,9 @@ export type AlgorithmCategory =
   | 'dp-2d';
 
 /**
- * Maps a frame's JS line number → the equivalent line in the target language.
- * Unmapped lines fall back to no highlight.
+ * Per-language line-number translation table.
+ * Maps a frame's JS `line` → the equivalent line in the target language.
+ * Lines without an entry fall back to no highlight.
  */
 export type LineMap = Partial<Record<Language, Record<number, number>>>;
 
@@ -172,12 +155,7 @@ export interface Algorithm {
   category: AlgorithmCategory;
   description: string;
   complexity: Complexity;
-  /** Code listing for every supported language */
   codes: Record<Language, string>;
-  /**
-   * Maps frame.line (JavaScript reference) → line number in each language.
-   * javascript and typescript always identity-map unless specified.
-   */
   lineMap?: LineMap;
   defaultInput?: Record<string, unknown>;
   generate: (input: Record<string, unknown>) => Frame[];
