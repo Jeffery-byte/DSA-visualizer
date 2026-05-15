@@ -19,21 +19,20 @@ export default function CallStackViz({ callStack }: Props) {
   const maxDepth = callStack.reduce((acc, f) => Math.max(acc, f.depth), 0);
 
   return (
-    <div className="flex flex-col items-center justify-center h-full px-4 gap-3 overflow-auto py-4">
-      <div className="text-xs font-mono text-slate-400">Call Stack</div>
+    <div className="flex flex-col items-center h-full px-5 gap-3 overflow-auto py-5">
+      <div className="text-sm font-semibold text-slate-400 self-start">Call Stack</div>
 
       {callStack.length === 0 ? (
-        <div className="text-xs text-slate-600 font-mono">Stack is empty</div>
+        <div className="text-sm text-slate-600 font-mono mt-4">Stack is empty</div>
       ) : (
-        <div className="flex flex-col gap-2 w-full max-w-lg">
-          {/* Show current call depth tree */}
+        <div className="flex flex-col gap-2.5 w-full">
           <AnimatePresence>
             {callStack.map((frame) => {
               const depthColor = DEPTH_COLORS[frame.depth % DEPTH_COLORS.length];
-              const hl = frame.highlight;
-              const hlStyle = hl ? getHighlightStyle(hl) : null;
-              const isActive = frame.isActive;
-              const indent = frame.depth * 20;
+              const hl         = frame.highlight;
+              const hlStyle    = hl ? getHighlightStyle(hl) : null;
+              const isActive   = frame.isActive;
+              const indent     = frame.depth * 24;
 
               return (
                 <motion.div
@@ -46,50 +45,49 @@ export default function CallStackViz({ callStack }: Props) {
                   className="relative"
                   style={{ paddingLeft: indent }}
                 >
-                  {/* Indent line */}
                   {frame.depth > 0 && (
                     <div
-                      className="absolute top-0 bottom-0 w-0.5 opacity-30"
-                      style={{ left: indent - 10, backgroundColor: depthColor.border }}
+                      className="absolute top-0 bottom-0 w-0.5 opacity-25"
+                      style={{ left: indent - 12, backgroundColor: depthColor.border }}
                     />
                   )}
 
                   <motion.div
                     animate={hlStyle ? {
                       backgroundColor: hlStyle.bg,
-                      borderColor: hlStyle.border,
-                      boxShadow: hlStyle.glow,
+                      borderColor:     hlStyle.border,
+                      boxShadow:       hlStyle.glow,
                     } : isActive ? {
                       backgroundColor: depthColor.bg,
-                      borderColor: depthColor.border,
-                      boxShadow: `0 0 8px ${depthColor.border}40`,
+                      borderColor:     depthColor.border,
+                      boxShadow:       `0 0 10px ${depthColor.border}40`,
                     } : {
                       backgroundColor: '#1e293b',
-                      borderColor: '#334155',
-                      boxShadow: 'none',
+                      borderColor:     '#334155',
+                      boxShadow:       'none',
                     }}
                     transition={{ duration: 0.2 }}
-                    className="rounded-lg border px-3 py-2 font-mono"
+                    className="rounded-xl border px-4 py-3 font-mono"
                   >
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center justify-between gap-3">
                       <span
-                        className="font-bold text-sm"
+                        className="font-bold text-base"
                         style={{ color: hlStyle ? hlStyle.text : isActive ? depthColor.border : '#64748b' }}
                       >
                         {frame.funcName}
                       </span>
                       {isActive && (
                         <motion.span
-                          animate={{ opacity: [1, 0.3, 1] }}
+                          animate={{ opacity: [1, 0.2, 1] }}
                           transition={{ duration: 1, repeat: Infinity }}
-                          className="w-2 h-2 rounded-full"
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                           style={{ backgroundColor: depthColor.border }}
                         />
                       )}
                     </div>
 
                     {/* Args */}
-                    <div className="text-xs mt-1 flex gap-2 flex-wrap">
+                    <div className="text-sm mt-1.5 flex gap-3 flex-wrap">
                       {Object.entries(frame.args).map(([k, v]) => (
                         <span key={k} className="text-slate-400">
                           <span className="text-slate-500">{k}=</span>
@@ -100,7 +98,7 @@ export default function CallStackViz({ callStack }: Props) {
 
                     {/* Return value */}
                     {frame.returnValue !== undefined && (
-                      <div className="text-xs mt-1">
+                      <div className="text-sm mt-1.5">
                         <span className="text-slate-500">returns </span>
                         <span className="text-emerald-400 font-bold">{String(frame.returnValue)}</span>
                       </div>
@@ -113,10 +111,9 @@ export default function CallStackViz({ callStack }: Props) {
         </div>
       )}
 
-      {/* Depth indicator */}
       {callStack.length > 0 && (
-        <div className="text-xs text-slate-500 font-mono">
-          Depth: {maxDepth + 1} | Frames: {callStack.length}
+        <div className="text-xs text-slate-500 font-mono mt-1 self-start">
+          Depth: {maxDepth + 1} · Frames: {callStack.length}
         </div>
       )}
     </div>

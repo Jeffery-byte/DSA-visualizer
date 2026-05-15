@@ -12,11 +12,6 @@ const LANGUAGES: { id: Language; label: string; color: string }[] = [
   { id: 'c',          label: 'C',      color: '#555555' },
 ];
 
-// ─── Pre-compiled syntax-highlighting regexes ─────────────────────────────────
-// Defined once at module level so they are never re-created during rendering.
-// Each regex uses `new RegExp(..., 'g')` because `String.replace` with a /g
-// regex resets lastIndex before each call, so there is no stale-state risk.
-
 const RX_COMMENT: Record<Language, RegExp> = {
   javascript: /\/\/.*$/gm,
   typescript: /\/\/.*$/gm,
@@ -25,7 +20,7 @@ const RX_COMMENT: Record<Language, RegExp> = {
   c:          /\/\/.*$|\/\*[\s\S]*?\*\//gm,
 };
 
-const RX_STRING: RegExp = /(["'`])(?:(?!\1)[^\\]|\\.)*\1/g;
+const RX_STRING = /(["'`])(?:(?!\1)[^\\]|\\.)*\1/g;
 
 const RX_KEYWORDS: Record<Language, RegExp> = {
   javascript: /\b(function|return|const|let|var|if|else|for|while|of|in|new|true|false|null|undefined|break|continue|class|this)\b/g,
@@ -43,49 +38,23 @@ const RX_BUILTINS: Record<Language, RegExp | null> = {
   c:          null,
 };
 
-const RX_NUMBER: RegExp = /\b(\d+(?:\.\d+)?)\b/g;
+const RX_NUMBER = /\b(\d+(?:\.\d+)?)\b/g;
 
-/** Highlight a single line of code for the given language.
- *  Input is HTML-escaped before any pattern is applied, so injected
- *  code strings cannot break out of the span tags (no XSS risk). */
 function highlightLine(code: string, lang: Language, isActive: boolean): string {
-  // 1. Escape HTML entities FIRST so injected code can't break the markup.
-  let html = code
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-
-  // 2. Comments (must come before strings to avoid partial tokenisation)
-  html = html.replace(RX_COMMENT[lang],
-    m => `<span style="color:#6b7280">${m}</span>`);
-
-  // 3. Strings
-  html = html.replace(RX_STRING,
-    m => `<span style="color:#86efac">${m}</span>`);
-
-  // 4. Builtins
+  let html = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  html = html.replace(RX_COMMENT[lang],  m => `<span style="color:#6b7280">${m}</span>`);
+  html = html.replace(RX_STRING,          m => `<span style="color:#86efac">${m}</span>`);
   const builtinRx = RX_BUILTINS[lang];
-  if (builtinRx) {
-    html = html.replace(builtinRx,
-      m => `<span style="color:#67e8f9">${m}</span>`);
-  }
-
-  // 5. Keywords
-  html = html.replace(RX_KEYWORDS[lang],
-    m => `<span style="color:#c084fc">${m}</span>`);
-
-  // 6. Numbers
-  html = html.replace(RX_NUMBER,
-    m => `<span style="color:#fb923c">${m}</span>`);
-
-  return `<span style="color:${isActive ? '#e2e8f0' : '#94a3b8'};white-space:pre">${html}</span>`;
+  if (builtinRx) html = html.replace(builtinRx, m => `<span style="color:#67e8f9">${m}</span>`);
+  html = html.replace(RX_KEYWORDS[lang],  m => `<span style="color:#c084fc">${m}</span>`);
+  html = html.replace(RX_NUMBER,          m => `<span style="color:#fb923c">${m}</span>`);
+  return `<span style="color:${isActive ? '#f1f5f9' : '#94a3b8'};white-space:pre">${html}</span>`;
 }
 
-/** Map a time/space notation string to a colour for its badge. */
-function complexityColor(notation: string): string {
-  if (/O\(1\)|O\(log/.test(notation))  return '#22c55e';
-  if (/O\(n\)|O\(k\)|O\(h\)/.test(notation)) return '#eab308';
-  if (/O\(n.log|O\(n.k/.test(notation)) return '#f97316';
+function complexityColor(n: string): string {
+  if (/O\(1\)|O\(log/.test(n))        return '#22c55e';
+  if (/O\(n\)|O\(k\)|O\(h\)/.test(n)) return '#eab308';
+  if (/O\(n.log|O\(n.k/.test(n))      return '#f97316';
   return '#ef4444';
 }
 
@@ -94,18 +63,15 @@ export default function CodePanel() {
   const [complexityOpen, setComplexityOpen] = useState(false);
   const activeLineRef = useRef<HTMLDivElement | null>(null);
 
-  const frame   = frames[currentFrameIndex];
-  const jsLine  = frame?.line ?? -1;
-  const lang    = selectedLanguage;
-  const algo    = selectedAlgorithm;
-  const code    = algo?.codes[lang] ?? '';
-  const lines   = code.split('\n');
-
-  // Resolve JS frame line → line number in the selected language
+  const frame      = frames[currentFrameIndex];
+  const jsLine     = frame?.line ?? -1;
+  const lang       = selectedLanguage;
+  const algo       = selectedAlgorithm;
+  const code       = algo?.codes[lang] ?? '';
+  const lines      = code.split('\n');
   const lineMap    = algo?.lineMap?.[lang];
   const activeLine = lineMap ? (lineMap[jsLine] ?? -1) : jsLine;
 
-  // Stable ref callback — does not recreate a function on every render
   const setActiveLineRef = useCallback((el: HTMLDivElement | null) => {
     activeLineRef.current = el;
   }, []);
@@ -117,22 +83,19 @@ export default function CodePanel() {
   const toggleComplexity = useCallback(() => setComplexityOpen(o => !o), []);
 
   return (
-    <div className="flex flex-col h-full bg-slate-950/80 border-l border-slate-800">
+    <div className="flex flex-col h-full bg-slate-950 border-l border-slate-800">
 
       {/* Language tabs */}
-      <div
-        className="flex-shrink-0 flex items-center gap-1 px-3 py-2 border-b border-slate-800 bg-slate-900/50"
-        role="tablist"
-        aria-label="Programming language"
-      >
+      <div className="flex-shrink-0 flex items-center gap-1.5 px-4 py-3 border-b border-slate-800 bg-slate-900/60"
+        role="tablist" aria-label="Programming language">
         {LANGUAGES.map(l => (
           <button
             key={l.id}
             role="tab"
             aria-selected={lang === l.id}
             onClick={() => setLanguage(l.id)}
-            className={`px-2.5 py-1 rounded text-xs font-mono font-semibold transition-all ${
-              lang === l.id ? 'text-slate-900' : 'text-slate-500 hover:text-slate-300'
+            className={`px-3 py-1.5 rounded-lg text-sm font-mono font-semibold transition-all ${
+              lang === l.id ? 'text-slate-900' : 'text-slate-500 hover:text-slate-200 hover:bg-slate-700/60'
             }`}
             style={lang === l.id ? { backgroundColor: l.color } : {}}
           >
@@ -142,23 +105,23 @@ export default function CodePanel() {
       </div>
 
       {/* Step description */}
-      <div className="px-4 py-2 border-b border-slate-800 flex-shrink-0" style={{ minHeight: 52 }}>
+      <div className="px-4 py-3 border-b border-slate-800 flex-shrink-0 min-h-[64px]">
         <motion.div
           key={frame?.description}
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2 }}
-          className="text-xs text-slate-300 font-mono leading-relaxed"
+          className="text-sm text-slate-200 font-mono leading-relaxed"
         >
           <span className="text-blue-400 font-bold mr-2">▶</span>
           {frame?.description ?? ''}
         </motion.div>
         {frame?.variables && Object.keys(frame.variables).length > 0 && (
-          <div className="mt-1 flex gap-3 flex-wrap">
+          <div className="mt-2 flex gap-4 flex-wrap">
             {Object.entries(frame.variables).map(([k, v]) => (
-              <span key={k} className="text-[10px] font-mono">
+              <span key={k} className="text-xs font-mono">
                 <span className="text-slate-500">{k}=</span>
-                <span className="text-yellow-400">{JSON.stringify(v)}</span>
+                <span className="text-yellow-400 font-semibold">{JSON.stringify(v)}</span>
               </span>
             ))}
           </div>
@@ -166,8 +129,8 @@ export default function CodePanel() {
       </div>
 
       {/* Code listing */}
-      <div className="flex-1 overflow-auto py-2 min-h-0" role="tabpanel" aria-label={`${lang} code`}>
-        <div className="font-mono text-xs">
+      <div className="flex-1 overflow-auto py-3 min-h-0" role="tabpanel" aria-label={`${lang} code`}>
+        <div className="font-mono" style={{ fontSize: 13 }}>
           {lines.map((line, idx) => {
             const lineNum  = idx + 1;
             const isActive = lineNum === activeLine;
@@ -183,25 +146,18 @@ export default function CodePanel() {
                     layoutId="code-active-line"
                     className="absolute inset-0 z-0"
                     initial={false}
-                    style={{ background: 'rgba(59,130,246,0.12)', borderLeft: '3px solid #3b82f6' }}
+                    style={{ background: 'rgba(59,130,246,0.15)', borderLeft: '3px solid #3b82f6' }}
                     transition={{ duration: 0.15 }}
                   />
                 )}
-
-                {/* Line number */}
-                <span
-                  className={`relative z-10 select-none w-8 text-right pr-3 py-0.5 flex-shrink-0 ${
-                    isActive ? 'text-blue-400 font-bold' : 'text-slate-700'
-                  }`}
-                >
+                <span className={`relative z-10 select-none text-right pr-4 py-0.5 flex-shrink-0 ${
+                  isActive ? 'text-blue-400 font-bold' : 'text-slate-700'
+                }`} style={{ width: 40 }}>
                   {lineNum}
                 </span>
-
-                {/* Source code with syntax highlighting.
-                    The content is HTML-escaped before any regex is applied
-                    in highlightLine(), so this is safe against XSS. */}
                 <div
-                  className="relative z-10 flex-1 py-0.5 pr-4 leading-5"
+                  className="relative z-10 flex-1 py-0.5 pr-5"
+                  style={{ lineHeight: '1.7' }}
                   dangerouslySetInnerHTML={{ __html: highlightLine(line, lang, isActive) }}
                 />
               </div>
@@ -210,22 +166,22 @@ export default function CodePanel() {
         </div>
       </div>
 
-      {/* Complexity Analysis — key resets the open state when the algorithm changes */}
+      {/* Complexity Analysis */}
       {algo?.complexity && (
         <div key={algo.id} className="flex-shrink-0 border-t border-slate-800">
           <button
             onClick={toggleComplexity}
             aria-expanded={complexityOpen}
             aria-controls="complexity-panel"
-            className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-800/40 transition-colors"
+            className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-800/40 transition-colors"
           >
-            <span className="text-xs font-semibold text-slate-300 flex items-center gap-2">
+            <span className="text-sm font-semibold text-slate-300 flex items-center gap-2">
               <span className="text-slate-500" aria-hidden="true">⏱</span>
               Complexity Analysis
             </span>
             {complexityOpen
-              ? <ChevronUp   size={13} className="text-slate-500" />
-              : <ChevronDown size={13} className="text-slate-500" />}
+              ? <ChevronUp   size={15} className="text-slate-500" />
+              : <ChevronDown size={15} className="text-slate-500" />}
           </button>
 
           <AnimatePresence>
@@ -240,38 +196,27 @@ export default function CodePanel() {
               >
                 <div className="px-4 pb-4 space-y-3">
                   <div className="flex gap-3">
-                    {/* Time badge */}
-                    <div className="flex-1 rounded-lg p-2.5 bg-slate-900 border border-slate-800">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <Clock size={11} className="text-slate-500" aria-hidden="true" />
-                        <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Time</span>
+                    <div className="flex-1 rounded-xl p-3 bg-slate-900 border border-slate-800">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <Clock size={12} className="text-slate-500" aria-hidden="true" />
+                        <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Time</span>
                       </div>
-                      <span
-                        className="font-mono font-bold text-sm"
-                        style={{ color: complexityColor(algo.complexity.time) }}
-                      >
+                      <span className="font-mono font-bold text-base" style={{ color: complexityColor(algo.complexity.time) }}>
                         {algo.complexity.time}
                       </span>
                     </div>
-
-                    {/* Space badge */}
-                    <div className="flex-1 rounded-lg p-2.5 bg-slate-900 border border-slate-800">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <Database size={11} className="text-slate-500" aria-hidden="true" />
-                        <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Space</span>
+                    <div className="flex-1 rounded-xl p-3 bg-slate-900 border border-slate-800">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <Database size={12} className="text-slate-500" aria-hidden="true" />
+                        <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Space</span>
                       </div>
-                      <span
-                        className="font-mono font-bold text-sm"
-                        style={{ color: complexityColor(algo.complexity.space) }}
-                      >
+                      <span className="font-mono font-bold text-base" style={{ color: complexityColor(algo.complexity.space) }}>
                         {algo.complexity.space}
                       </span>
                     </div>
                   </div>
-
-                  {/* Reasoning */}
-                  <div className="rounded-lg p-3 bg-slate-900/60 border border-slate-800">
-                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                  <div className="rounded-xl p-3 bg-slate-900/60 border border-slate-800">
+                    <p className="text-xs text-slate-400 leading-relaxed">
                       {algo.complexity.reasoning}
                     </p>
                   </div>
