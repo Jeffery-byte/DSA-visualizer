@@ -1,12 +1,10 @@
 import type { Algorithm, Frame, CallStackFrame, ArrayState } from '../../types';
 
-let frameIdCounter = 0;
-
 // ─── Fibonacci ────────────────────────────────────────────────────────────────
 function generateFib(input: Record<string, unknown>): Frame[] {
   const n = Math.min((input.n as number) ?? 5, 7);
   const frames: Frame[] = [];
-  frameIdCounter = 0;
+  let frameIdCounter = 0;
   const stack: CallStackFrame[] = [];
 
   function fib(n: number, depth: number): number {

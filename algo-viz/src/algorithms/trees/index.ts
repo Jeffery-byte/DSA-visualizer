@@ -1,22 +1,23 @@
 import type { Algorithm, Frame, TreeNode, TreeState } from '../../types';
 
-let nodeIdCounter = 0;
+/** Mutable counter scoped to each generator invocation via a simple object. */
+interface Counter { value: number }
 
-function buildTree(vals: (number | null)[]): TreeNode | null {
+function buildTree(vals: (number | null)[], counter: Counter): TreeNode | null {
   if (!vals.length || vals[0] == null) return null;
-  nodeIdCounter = 0;
-  const root: TreeNode = { id: nodeIdCounter++, val: vals[0] };
+  counter.value = 0;
+  const root: TreeNode = { id: counter.value++, val: vals[0] };
   const queue: TreeNode[] = [root];
   let i = 1;
   while (i < vals.length && queue.length) {
     const node = queue.shift()!;
     if (i < vals.length && vals[i] != null) {
-      node.left = { id: nodeIdCounter++, val: vals[i]! };
+      node.left = { id: counter.value++, val: vals[i]! };
       queue.push(node.left);
     }
     i++;
     if (i < vals.length && vals[i] != null) {
-      node.right = { id: nodeIdCounter++, val: vals[i]! };
+      node.right = { id: counter.value++, val: vals[i]! };
       queue.push(node.right);
     }
     i++;
@@ -39,7 +40,8 @@ function setHighlight(root: TreeNode | null | undefined, id: number, color: Tree
 // ─── BFS Level Order ──────────────────────────────────────────────────────────
 function generateBFSTree(input: Record<string, unknown>): Frame[] {
   const vals = (input.tree as (number | null)[]) ?? [1, 2, 3, 4, 5, 6, 7];
-  const root = buildTree(vals);
+  const counter: Counter = { value: 0 };
+  const root = buildTree(vals, counter);
   const frames: Frame[] = [];
 
   const makeState = (root: TreeNode | null, highlights: TreeState['highlights'], queue: number[]): TreeState => ({
@@ -87,7 +89,8 @@ function generateBFSTree(input: Record<string, unknown>): Frame[] {
 // ─── DFS Inorder ──────────────────────────────────────────────────────────────
 function generateDFSInorder(input: Record<string, unknown>): Frame[] {
   const vals = (input.tree as (number | null)[]) ?? [4, 2, 6, 1, 3, 5, 7];
-  const root = buildTree(vals);
+  const counter: Counter = { value: 0 };
+  const root = buildTree(vals, counter);
   const frames: Frame[] = [];
   const result: number[] = [];
 
@@ -114,7 +117,8 @@ function generateDFSInorder(input: Record<string, unknown>): Frame[] {
 // ─── BST Insert ───────────────────────────────────────────────────────────────
 function generateBSTInsert(input: Record<string, unknown>): Frame[] {
   const vals = (input.tree as (number | null)[]) ?? [5, 3, 8, 1, 4, 7, 9];
-  let root = buildTree(vals);
+  const counter: Counter = { value: 0 };
+  let root = buildTree(vals, counter);
   const insertVal = (input.insertVal as number) ?? 6;
   const frames: Frame[] = [];
 
@@ -122,7 +126,7 @@ function generateBSTInsert(input: Record<string, unknown>): Frame[] {
 
   function insert(node: TreeNode | null, val: number, depth: number): TreeNode {
     if (!node) {
-      const newNode: TreeNode = { id: nodeIdCounter++, val };
+      const newNode: TreeNode = { id: counter.value++, val };
       frames.push({ line: 3, description: `Found empty spot! Insert ${val} here`, tree: { root: cloneTree(root), highlights: [{ id: newNode.id, color: 'found' }] } });
       return newNode;
     }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, ChevronUp, Clock, Database } from 'lucide-react';
 import { useStore } from '../../store';
@@ -12,8 +12,22 @@ const LANGUAGES: { id: Language; label: string; color: string }[] = [
   { id: 'c',          label: 'C',      color: '#555555' },
 ];
 
-// ─── Language-specific keyword sets ──────────────────────────────────────────
-const KEYWORDS: Record<Language, RegExp> = {
+// ─── Pre-compiled syntax-highlighting regexes ─────────────────────────────────
+// Defined once at module level so they are never re-created during rendering.
+// Each regex uses `new RegExp(..., 'g')` because `String.replace` with a /g
+// regex resets lastIndex before each call, so there is no stale-state risk.
+
+const RX_COMMENT: Record<Language, RegExp> = {
+  javascript: /\/\/.*$/gm,
+  typescript: /\/\/.*$/gm,
+  python:     /#.*$/gm,
+  java:       /\/\/.*$/gm,
+  c:          /\/\/.*$|\/\*[\s\S]*?\*\//gm,
+};
+
+const RX_STRING: RegExp = /(["'`])(?:(?!\1)[^\\]|\\.)*\1/g;
+
+const RX_KEYWORDS: Record<Language, RegExp> = {
   javascript: /\b(function|return|const|let|var|if|else|for|while|of|in|new|true|false|null|undefined|break|continue|class|this)\b/g,
   typescript: /\b(function|return|const|let|var|if|else|for|while|of|in|new|true|false|null|undefined|break|continue|class|this|type|interface|enum|readonly|as|extends|implements|void|number|string|boolean|never)\b/g,
   python:     /\b(def|return|if|elif|else|for|while|in|not|and|or|is|None|True|False|import|from|class|self|lambda|yield|with|as|pass|break|continue|range|len|append|pop|sorted|list|dict|set|print)\b/g,
@@ -21,50 +35,55 @@ const KEYWORDS: Record<Language, RegExp> = {
   c:          /\b(int|void|char|float|double|long|short|unsigned|signed|struct|union|return|if|else|for|while|do|switch|case|break|continue|sizeof|static|const|NULL|malloc|free|calloc|printf|memset|strlen|strcpy|strcmp)\b/g,
 };
 
-const BUILTINS: Record<Language, RegExp | null> = {
-  javascript: /\b(Math|Array|Map|Set|Object|JSON|console|push|pop|shift|unshift|length|has|get|set|fill|from|keys|values|entries|join|split|sort|map|filter|reduce|floor|ceil|abs|max|min|Infinity|slice|indexOf|includes|toString|parseInt|parseFloat)\b/g,
-  typescript: /\b(Math|Array|Map|Set|Object|JSON|console|push|pop|shift|unshift|length|has|get|set|fill|from|keys|values|entries|join|split|sort|map|filter|reduce|floor|ceil|abs|max|min|Infinity|slice|indexOf|includes|toString|parseInt|parseFloat|Record|Partial|Required|Readonly|Pick|Omit)\b/g,
+const RX_BUILTINS: Record<Language, RegExp | null> = {
+  javascript: /\b(Math|Array|Map|Set|Object|JSON|console|push|pop|shift|unshift|length|has|get|set|fill|from|keys|values|entries|join|split|sort|map|filter|reduce|floor|ceil|abs|max|min|Infinity|slice|indexOf|includes|parseInt|parseFloat)\b/g,
+  typescript: /\b(Math|Array|Map|Set|Object|JSON|console|push|pop|shift|unshift|length|has|get|set|fill|from|keys|values|entries|join|split|sort|map|filter|reduce|floor|ceil|abs|max|min|Infinity|slice|indexOf|includes|parseInt|parseFloat|Record|Partial|Required|Readonly|Pick|Omit)\b/g,
   python:     null,
-  java:       /\b(Math|Arrays|ArrayList|LinkedList|HashMap|HashSet|Queue|Stack|Collections|System|Integer|String|List|Map|Set|PriorityQueue|Scanner|StringBuilder|Comparator|Optional|Stream)\b/g,
+  java:       /\b(Math|Arrays|ArrayList|LinkedList|HashMap|HashSet|Queue|Stack|Collections|System|Integer|List|Map|Set|PriorityQueue|StringBuilder|Optional|Stream)\b/g,
   c:          null,
 };
 
+const RX_NUMBER: RegExp = /\b(\d+(?:\.\d+)?)\b/g;
+
+/** Highlight a single line of code for the given language.
+ *  Input is HTML-escaped before any pattern is applied, so injected
+ *  code strings cannot break out of the span tags (no XSS risk). */
 function highlightLine(code: string, lang: Language, isActive: boolean): string {
+  // 1. Escape HTML entities FIRST so injected code can't break the markup.
   let html = code
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
-  // Comments
-  if (lang === 'python') {
-    html = html.replace(/(#.*$)/gm, '<span style="color:#6b7280">$1</span>');
-  } else if (lang === 'c' || lang === 'java') {
-    html = html.replace(/(\/\/.*$)/gm, '<span style="color:#6b7280">$1</span>');
-  } else {
-    html = html.replace(/(\/\/.*$)/gm, '<span style="color:#6b7280">$1</span>');
+  // 2. Comments (must come before strings to avoid partial tokenisation)
+  html = html.replace(RX_COMMENT[lang],
+    m => `<span style="color:#6b7280">${m}</span>`);
+
+  // 3. Strings
+  html = html.replace(RX_STRING,
+    m => `<span style="color:#86efac">${m}</span>`);
+
+  // 4. Builtins
+  const builtinRx = RX_BUILTINS[lang];
+  if (builtinRx) {
+    html = html.replace(builtinRx,
+      m => `<span style="color:#67e8f9">${m}</span>`);
   }
 
-  // Strings
-  html = html.replace(/(["'`])(?:(?!\1)[^\\]|\\.)*\1/g, '<span style="color:#86efac">$&</span>');
+  // 5. Keywords
+  html = html.replace(RX_KEYWORDS[lang],
+    m => `<span style="color:#c084fc">${m}</span>`);
 
-  // Builtins (before keywords to avoid double-wrapping)
-  const builtinRe = BUILTINS[lang];
-  if (builtinRe) {
-    html = html.replace(new RegExp(builtinRe.source, 'g'), '<span style="color:#67e8f9">$&</span>');
-  }
+  // 6. Numbers
+  html = html.replace(RX_NUMBER,
+    m => `<span style="color:#fb923c">${m}</span>`);
 
-  // Keywords
-  html = html.replace(new RegExp(KEYWORDS[lang].source, 'g'), '<span style="color:#c084fc">$1</span>');
-
-  // Numbers
-  html = html.replace(/\b(\d+(?:\.\d+)?)\b/g, '<span style="color:#fb923c">$1</span>');
-
-  return `<span style="color:${isActive ? '#e2e8f0' : '#94a3b8'}; white-space:pre">${html}</span>`;
+  return `<span style="color:${isActive ? '#e2e8f0' : '#94a3b8'};white-space:pre">${html}</span>`;
 }
 
-// ─── Complexity badge colours ─────────────────────────────────────────────────
+/** Map a time/space notation string to a colour for its badge. */
 function complexityColor(notation: string): string {
-  if (/O\(1\)|O\(log/.test(notation)) return '#22c55e';
+  if (/O\(1\)|O\(log/.test(notation))  return '#22c55e';
   if (/O\(n\)|O\(k\)|O\(h\)/.test(notation)) return '#eab308';
   if (/O\(n.log|O\(n.k/.test(notation)) return '#f97316';
   return '#ef4444';
@@ -73,39 +92,47 @@ function complexityColor(notation: string): string {
 export default function CodePanel() {
   const { selectedAlgorithm, frames, currentFrameIndex, selectedLanguage, setLanguage } = useStore();
   const [complexityOpen, setComplexityOpen] = useState(false);
-  const lineRef = useRef<HTMLDivElement | null>(null);
+  const activeLineRef = useRef<HTMLDivElement | null>(null);
 
-  const frame = frames[currentFrameIndex];
-  const description = frame?.description ?? '';
-  const variables = frame?.variables;
-  const jsLine = frame?.line ?? -1;
+  const frame   = frames[currentFrameIndex];
+  const jsLine  = frame?.line ?? -1;
+  const lang    = selectedLanguage;
+  const algo    = selectedAlgorithm;
+  const code    = algo?.codes[lang] ?? '';
+  const lines   = code.split('\n');
 
-  const lang = selectedLanguage;
-  const algo = selectedAlgorithm;
-  const code = algo?.codes[lang] ?? '';
-  const lines = code.split('\n');
-
-  // Resolve line number in the selected language
-  const lineMap = algo?.lineMap?.[lang];
+  // Resolve JS frame line → line number in the selected language
+  const lineMap    = algo?.lineMap?.[lang];
   const activeLine = lineMap ? (lineMap[jsLine] ?? -1) : jsLine;
 
+  // Stable ref callback — does not recreate a function on every render
+  const setActiveLineRef = useCallback((el: HTMLDivElement | null) => {
+    activeLineRef.current = el;
+  }, []);
+
   useEffect(() => {
-    lineRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    activeLineRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [activeLine]);
+
+  const toggleComplexity = useCallback(() => setComplexityOpen(o => !o), []);
 
   return (
     <div className="flex flex-col h-full bg-slate-950/80 border-l border-slate-800">
 
-      {/* Language selector tabs */}
-      <div className="flex-shrink-0 flex items-center gap-1 px-3 py-2 border-b border-slate-800 bg-slate-900/50">
+      {/* Language tabs */}
+      <div
+        className="flex-shrink-0 flex items-center gap-1 px-3 py-2 border-b border-slate-800 bg-slate-900/50"
+        role="tablist"
+        aria-label="Programming language"
+      >
         {LANGUAGES.map(l => (
           <button
             key={l.id}
+            role="tab"
+            aria-selected={lang === l.id}
             onClick={() => setLanguage(l.id)}
             className={`px-2.5 py-1 rounded text-xs font-mono font-semibold transition-all ${
-              lang === l.id
-                ? 'text-slate-900'
-                : 'text-slate-500 hover:text-slate-300'
+              lang === l.id ? 'text-slate-900' : 'text-slate-500 hover:text-slate-300'
             }`}
             style={lang === l.id ? { backgroundColor: l.color } : {}}
           >
@@ -114,21 +141,21 @@ export default function CodePanel() {
         ))}
       </div>
 
-      {/* Description / step bar */}
+      {/* Step description */}
       <div className="px-4 py-2 border-b border-slate-800 flex-shrink-0" style={{ minHeight: 52 }}>
         <motion.div
-          key={description}
+          key={frame?.description}
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2 }}
           className="text-xs text-slate-300 font-mono leading-relaxed"
         >
           <span className="text-blue-400 font-bold mr-2">▶</span>
-          {description}
+          {frame?.description ?? ''}
         </motion.div>
-        {variables && Object.keys(variables).length > 0 && (
+        {frame?.variables && Object.keys(frame.variables).length > 0 && (
           <div className="mt-1 flex gap-3 flex-wrap">
-            {Object.entries(variables).map(([k, v]) => (
+            {Object.entries(frame.variables).map(([k, v]) => (
               <span key={k} className="text-[10px] font-mono">
                 <span className="text-slate-500">{k}=</span>
                 <span className="text-yellow-400">{JSON.stringify(v)}</span>
@@ -138,22 +165,22 @@ export default function CodePanel() {
         )}
       </div>
 
-      {/* Code display */}
-      <div className="flex-1 overflow-auto py-2 relative min-h-0">
+      {/* Code listing */}
+      <div className="flex-1 overflow-auto py-2 min-h-0" role="tabpanel" aria-label={`${lang} code`}>
         <div className="font-mono text-xs">
           {lines.map((line, idx) => {
-            const lineNum = idx + 1;
+            const lineNum  = idx + 1;
             const isActive = lineNum === activeLine;
 
             return (
               <div
                 key={idx}
-                ref={isActive ? (el => { lineRef.current = el; }) : undefined}
+                ref={isActive ? setActiveLineRef : undefined}
                 className="relative flex items-stretch"
               >
                 {isActive && (
                   <motion.div
-                    layoutId={`code-highlight-${lang}`}
+                    layoutId="code-active-line"
                     className="absolute inset-0 z-0"
                     initial={false}
                     style={{ background: 'rgba(59,130,246,0.12)', borderLeft: '3px solid #3b82f6' }}
@@ -162,38 +189,49 @@ export default function CodePanel() {
                 )}
 
                 {/* Line number */}
-                <span className={`relative z-10 select-none w-8 text-right pr-3 py-0.5 flex-shrink-0 transition-colors ${isActive ? 'text-blue-400 font-bold' : 'text-slate-700'}`}>
+                <span
+                  className={`relative z-10 select-none w-8 text-right pr-3 py-0.5 flex-shrink-0 ${
+                    isActive ? 'text-blue-400 font-bold' : 'text-slate-700'
+                  }`}
+                >
                   {lineNum}
                 </span>
 
-                {/* Code */}
-                <div className="relative z-10 flex-1 py-0.5 pr-4 leading-5">
-                  <span
-                    dangerouslySetInnerHTML={{ __html: highlightLine(line, lang, isActive) }}
-                  />
-                </div>
+                {/* Source code with syntax highlighting.
+                    The content is HTML-escaped before any regex is applied
+                    in highlightLine(), so this is safe against XSS. */}
+                <div
+                  className="relative z-10 flex-1 py-0.5 pr-4 leading-5"
+                  dangerouslySetInnerHTML={{ __html: highlightLine(line, lang, isActive) }}
+                />
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* Complexity Analysis Panel */}
+      {/* Complexity Analysis — key resets the open state when the algorithm changes */}
       {algo?.complexity && (
-        <div className="flex-shrink-0 border-t border-slate-800">
+        <div key={algo.id} className="flex-shrink-0 border-t border-slate-800">
           <button
-            onClick={() => setComplexityOpen(o => !o)}
+            onClick={toggleComplexity}
+            aria-expanded={complexityOpen}
+            aria-controls="complexity-panel"
             className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-800/40 transition-colors"
           >
             <span className="text-xs font-semibold text-slate-300 flex items-center gap-2">
-              <span className="text-slate-500">⏱</span> Complexity Analysis
+              <span className="text-slate-500" aria-hidden="true">⏱</span>
+              Complexity Analysis
             </span>
-            {complexityOpen ? <ChevronUp size={13} className="text-slate-500" /> : <ChevronDown size={13} className="text-slate-500" />}
+            {complexityOpen
+              ? <ChevronUp   size={13} className="text-slate-500" />
+              : <ChevronDown size={13} className="text-slate-500" />}
           </button>
 
           <AnimatePresence>
             {complexityOpen && (
               <motion.div
+                id="complexity-panel"
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: 'auto', opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
@@ -201,11 +239,11 @@ export default function CodePanel() {
                 className="overflow-hidden"
               >
                 <div className="px-4 pb-4 space-y-3">
-                  {/* Time / Space badges */}
                   <div className="flex gap-3">
+                    {/* Time badge */}
                     <div className="flex-1 rounded-lg p-2.5 bg-slate-900 border border-slate-800">
                       <div className="flex items-center gap-1.5 mb-1">
-                        <Clock size={11} className="text-slate-500" />
+                        <Clock size={11} className="text-slate-500" aria-hidden="true" />
                         <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Time</span>
                       </div>
                       <span
@@ -216,9 +254,10 @@ export default function CodePanel() {
                       </span>
                     </div>
 
+                    {/* Space badge */}
                     <div className="flex-1 rounded-lg p-2.5 bg-slate-900 border border-slate-800">
                       <div className="flex items-center gap-1.5 mb-1">
-                        <Database size={11} className="text-slate-500" />
+                        <Database size={11} className="text-slate-500" aria-hidden="true" />
                         <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Space</span>
                       </div>
                       <span

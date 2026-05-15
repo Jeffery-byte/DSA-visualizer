@@ -20,7 +20,7 @@ export const highlightColors: Record<HighlightColor, { bg: string; border: strin
   source:      { bg: '#1e3a5f', border: '#38bdf8', text: '#fff', glow: '0 0 12px #38bdf8' },
   target:      { bg: '#7f1d1d', border: '#f87171', text: '#fff', glow: '0 0 12px #f87171' },
   'in-stack':  { bg: '#3b0764', border: '#c084fc', text: '#fff', glow: '0 0 10px #c084fc' },
-  result:      { bg: '#065f46', border: '#34d399', text: '#fff', glow: '0 0 16px #34d399' },
+  result:      { bg: '#1e3a5f', border: '#34d399', text: '#fff', glow: '0 0 16px #34d399' },
   excluded:    { bg: '#1f2937', border: '#374151', text: '#6b7280', glow: 'none' },
 };
 

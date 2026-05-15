@@ -14,6 +14,8 @@ export default function HashMapViz({ hashmap }: Props) {
       <div className="text-xs font-mono text-slate-400 self-start ml-2">HashMap</div>
       <div
         className="w-full max-w-md rounded-xl border border-slate-700 overflow-hidden bg-slate-900/70"
+        role="table"
+        aria-label="HashMap contents"
         style={{ minHeight: 120 }}
       >
         {/* Header */}
@@ -24,7 +26,7 @@ export default function HashMapViz({ hashmap }: Props) {
 
         {/* Entries */}
         <div className="divide-y divide-slate-800">
-          <AnimatePresence>
+          <AnimatePresence mode="popLayout">
             {entries.length === 0 ? (
               <motion.div
                 initial={{ opacity: 0 }}
@@ -34,13 +36,13 @@ export default function HashMapViz({ hashmap }: Props) {
                 empty
               </motion.div>
             ) : (
-              entries.map((entry, i) => {
+              entries.map((entry) => {
                 const hl = entry.highlight;
                 const style = hl ? getHighlightStyle(hl) : null;
 
                 return (
                   <motion.div
-                    key={`${entry.key}-${i}`}
+                    key={String(entry.key)}
                     layout
                     initial={{ opacity: 0, x: -20 }}
                     animate={{

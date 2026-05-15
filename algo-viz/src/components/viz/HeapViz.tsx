@@ -43,13 +43,18 @@ export default function HeapViz({ heap }: Props) {
         height={svgHeight}
         viewBox={`0 0 ${svgWidth} ${svgHeight}`}
         style={{ maxWidth: '100%', height: 'auto' }}
+        aria-label="Heap tree visualization"
+        role="img"
       >
         {/* Edges */}
         {data.map((_, i) => {
           if (i === 0 || i >= n) return null;
           const parent = Math.floor((i - 1) / 2);
-          const { x, y } = positions[i];
-          const { x: px, y: py } = positions[parent];
+          const pos = positions[i];
+          const parentPos = positions[parent];
+          if (!pos || !parentPos) return null;
+          const { x, y } = pos;
+          const { x: px, y: py } = parentPos;
           return (
             <line key={`edge-${i}`} x1={px} y1={py} x2={x} y2={y} stroke="#334155" strokeWidth={2} />
           );

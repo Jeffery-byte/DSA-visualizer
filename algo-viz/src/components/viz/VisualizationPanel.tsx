@@ -1,4 +1,4 @@
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import type { Frame } from '../../types';
 import ArrayViz from './ArrayViz';
 import MatrixViz from './MatrixViz';
@@ -46,51 +46,42 @@ export default function VisualizationPanel({ frame }: Props) {
   // ─── Matrix (Graphs / Grid problems) ─────────────────────────────────────────
   if (hasMatrix) {
     return (
-      <AnimatePresence mode="wait">
         <motion.div key="matrix" className="h-full" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           <MatrixViz matrix={frame.matrix!} />
         </motion.div>
-      </AnimatePresence>
-    );
+      );
   }
 
   // ─── Trees ───────────────────────────────────────────────────────────────────
   if (hasTree) {
     return (
-      <AnimatePresence mode="wait">
         <motion.div key="tree" className="h-full overflow-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           <TreeViz tree={frame.tree!} />
         </motion.div>
-      </AnimatePresence>
-    );
+      );
   }
 
   // ─── DP Table ─────────────────────────────────────────────────────────────────
   if (hasDPTable && !hasArrays) {
     return (
-      <AnimatePresence mode="wait">
         <motion.div key="dp" className="h-full" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           <DPTableViz dpTable={frame.dpTable!} />
         </motion.div>
-      </AnimatePresence>
-    );
+      );
   }
 
   // ─── Heap (standalone) ───────────────────────────────────────────────────────
   if (hasHeap && !hasArrays) {
     return (
-      <AnimatePresence mode="wait">
         <motion.div key="heap" className="h-full overflow-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           <HeapViz heap={frame.heap!} />
         </motion.div>
-      </AnimatePresence>
-    );
+      );
   }
 
   // ─── Recursion / Backtracking: call stack + arrays ────────────────────────────
   if (hasCallStack && (frame.callStack!.length > 0 || hasArrays)) {
     return (
-      <AnimatePresence mode="wait">
         <motion.div key="callstack" className="h-full flex flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           {hasArrays && (
             <div className="flex-shrink-0 border-b border-slate-800" style={{ height: '40%' }}>
@@ -105,14 +96,12 @@ export default function VisualizationPanel({ frame }: Props) {
             </Section>
           </div>
         </motion.div>
-      </AnimatePresence>
-    );
+      );
   }
 
   // ─── Hashmap + Array (side by side) ──────────────────────────────────────────
   if (hasHashmap && hasArrays) {
     return (
-      <AnimatePresence mode="wait">
         <motion.div key="hashmap-array" className="h-full flex flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           <div className="flex-shrink-0 border-b border-slate-800" style={{ height: '45%' }}>
             <Section title="Array">
@@ -125,25 +114,21 @@ export default function VisualizationPanel({ frame }: Props) {
             </Section>
           </div>
         </motion.div>
-      </AnimatePresence>
-    );
+      );
   }
 
   // ─── Standalone HashMap ───────────────────────────────────────────────────────
   if (hasHashmap) {
     return (
-      <AnimatePresence mode="wait">
         <motion.div key="hashmap" className="h-full" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           <HashMapViz hashmap={frame.hashmap!} />
         </motion.div>
-      </AnimatePresence>
-    );
+      );
   }
 
   // ─── Heap + Array ─────────────────────────────────────────────────────────────
   if (hasHeap && hasArrays) {
     return (
-      <AnimatePresence mode="wait">
         <motion.div key="heap-array" className="h-full flex flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           <div className="flex-shrink-0 border-b border-slate-800" style={{ height: '55%' }}>
             <Section title="Input Array">
@@ -156,19 +141,16 @@ export default function VisualizationPanel({ frame }: Props) {
             </Section>
           </div>
         </motion.div>
-      </AnimatePresence>
-    );
+      );
   }
 
   // ─── Arrays (default) ────────────────────────────────────────────────────────
   if (hasArrays) {
     return (
-      <AnimatePresence mode="wait">
         <motion.div key="arrays" className="h-full" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           <ArrayViz arrays={frame.arrays!} />
         </motion.div>
-      </AnimatePresence>
-    );
+      );
   }
 
   return (

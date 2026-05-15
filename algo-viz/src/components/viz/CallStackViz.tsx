@@ -16,7 +16,7 @@ const DEPTH_COLORS = [
 ];
 
 export default function CallStackViz({ callStack }: Props) {
-  const maxDepth = Math.max(...callStack.map(f => f.depth), 0);
+  const maxDepth = callStack.reduce((acc, f) => Math.max(acc, f.depth), 0);
 
   return (
     <div className="flex flex-col items-center justify-center h-full px-4 gap-3 overflow-auto py-4">

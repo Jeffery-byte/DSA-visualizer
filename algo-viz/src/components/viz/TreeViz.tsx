@@ -24,17 +24,22 @@ function getTreeHeight(node: TreeNode | null | undefined): number {
   return 1 + Math.max(getTreeHeight(node.left), getTreeHeight(node.right));
 }
 
-function positionNodes(node: TreeNode | null | undefined, depth: number, left: number, right: number, parentX?: number, parentY?: number): PositionedNode[] {
+function positionNodes(
+  node: TreeNode | null | undefined,
+  depth: number,
+  left: number,
+  right: number,
+  parentX?: number,
+  parentY?: number,
+): PositionedNode[] {
   if (!node) return [];
   const x = (left + right) / 2;
   const y = depth * V_GAP + NODE_R + 10;
   const mid = (left + right) / 2;
   const result: PositionedNode[] = [{ node, x, y, parentX, parentY }];
 
-  const leftWidth = (right - left) / 2;
-  result.push(...positionNodes(node.left, depth + 1, left, mid - H_GAP / 4, x, y));
-  result.push(...positionNodes(node.right, depth + 1, mid + H_GAP / 4, right, x, y));
-  void leftWidth;
+  result.push(...positionNodes(node.left,  depth + 1, left,              mid - H_GAP / 4, x, y));
+  result.push(...positionNodes(node.right, depth + 1, mid + H_GAP / 4,  right,           x, y));
   return result;
 }
 
@@ -42,26 +47,29 @@ export default function TreeViz({ tree }: Props) {
   const { root, highlights, queue } = tree;
 
   const { nodes, width, height } = useMemo(() => {
-    if (!root) return { nodes: [], width: 400, height: 200 };
+    if (!root) return { nodes: [] as PositionedNode[], width: 400, height: 200 };
     const h = getTreeHeight(root);
     const leafCount = Math.pow(2, h - 1);
     const w = Math.max(400, leafCount * (NODE_R * 2 + H_GAP));
-    const nodes = positionNodes(root, 0, 0, w);
-    const maxY = Math.max(...nodes.map(n => n.y)) + NODE_R + 20;
-    return { nodes, width: w, height: maxY };
+    const positioned = positionNodes(root, 0, 0, w);
+    // Guard against empty positioned array before spreading into Math.max
+    const maxY = positioned.length > 0
+      ? positioned.reduce((acc, n) => Math.max(acc, n.y), 0) + NODE_R + 20
+      : 200;
+    return { nodes: positioned, width: w, height: maxY };
   }, [root]);
 
   const highlightMap = useMemo(() => {
-    const m = new Map<number, typeof highlights[0]>();
+    const m = new Map<number, (typeof highlights)[0]>();
     highlights.forEach(h => m.set(h.id, h));
     return m;
   }, [highlights]);
 
   return (
     <div className="flex flex-col items-center gap-4 h-full overflow-auto py-4">
-      {/* Queue display */}
+      {/* BFS queue display */}
       {queue && queue.length > 0 && (
-        <div className="flex items-center gap-2 flex-wrap justify-center">
+        <div className="flex items-center gap-2 flex-wrap justify-center px-4">
           <span className="text-xs text-slate-400 font-mono">Queue:</span>
           {queue.map((id, i) => {
             const nodeData = nodes.find(n => n.node.id === id);
@@ -87,16 +95,16 @@ export default function TreeViz({ tree }: Props) {
         viewBox={`0 0 ${width} ${height}`}
         className="overflow-visible"
         style={{ maxWidth: '100%', height: 'auto' }}
+        aria-label="Binary tree visualization"
+        role="img"
       >
         {/* Edges */}
         {nodes.map(({ node, x, y, parentX, parentY }) =>
           parentX != null && parentY != null ? (
             <motion.line
               key={`edge-${node.id}`}
-              x1={parentX}
-              y1={parentY}
-              x2={x}
-              y2={y}
+              x1={parentX} y1={parentY}
+              x2={x}       y2={y}
               stroke="#334155"
               strokeWidth={2}
               initial={{ opacity: 0 }}
@@ -113,12 +121,11 @@ export default function TreeViz({ tree }: Props) {
 
           return (
             <g key={`node-${node.id}`}>
-              {/* Glow ring */}
-              {hl && (
+              {hl && style && style.glow !== 'none' && (
                 <motion.circle
                   cx={x} cy={y} r={NODE_R + 6}
                   fill="none"
-                  stroke={style!.border}
+                  stroke={style.border}
                   strokeWidth={1.5}
                   opacity={0.4}
                   animate={{ r: [NODE_R + 4, NODE_R + 8, NODE_R + 4] }}
@@ -129,9 +136,11 @@ export default function TreeViz({ tree }: Props) {
               <motion.circle
                 cx={x} cy={y} r={NODE_R}
                 animate={{
-                  fill: hl ? style!.bg : '#1e293b',
+                  fill:   hl ? style!.bg     : '#1e293b',
                   stroke: hl ? style!.border : '#475569',
-                  filter: hl && style!.glow !== 'none' ? `drop-shadow(0 0 6px ${style!.border})` : 'none',
+                  filter: hl && style!.glow !== 'none'
+                    ? `drop-shadow(0 0 6px ${style!.border})`
+                    : 'none',
                 }}
                 strokeWidth={2}
                 transition={{ duration: 0.25 }}
@@ -141,11 +150,13 @@ export default function TreeViz({ tree }: Props) {
                 x={x} y={y + 1}
                 textAnchor="middle"
                 dominantBaseline="middle"
-                className="font-mono font-bold select-none"
                 style={{
                   fontSize: String(node.val).length > 2 ? 11 : 13,
                   fill: hl ? style!.text : '#94a3b8',
+                  fontFamily: 'monospace',
+                  fontWeight: 'bold',
                   pointerEvents: 'none',
+                  userSelect: 'none',
                 }}
               >
                 {String(node.val)}
