@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-900: #0f0f1a;
+  --color-brand-800: #13131f;
+  --color-brand-700: #1a1a2e;
+  --color-brand-600: #16213e;
+  --color-brand-500: #0f3460;
+  --color-brand-400: #533483;
+
+  --color-node-blue: #3b82f6;
+  --color-node-green: #22c55e;
+  --color-node-yellow: #eab308;
+  --color-node-red: #ef4444;
+  --color-node-purple: #a855f7;
+  --color-node-orange: #f97316;
+  --color-node-cyan: #06b6d4;
+  --color-node-pink: #ec4899;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #0f0f1a;
+  color: #e2e8f0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+  height: 100vh;
+}
+
+#root {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #1a1a2e;
+}
+::-webkit-scrollbar-thumb {
+  background: #3b3b5c;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #5b5b8c;
+}
+
+.node-enter {
+  animation: nodeEnter 0.3s ease-out;
+}
+
+@keyframes nodeEnter {
+  from { transform: scale(0); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.pulse-ring {
+  animation: pulseRing 1s ease-out infinite;
+}
+
+@keyframes pulseRing {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+.line-highlight {
+  background: rgba(59, 130, 246, 0.15);
+  border-left: 3px solid #3b82f6;
+  animation: lineHighlight 0.2s ease-out;
+}
+
+@keyframes lineHighlight {
+  from { background: rgba(59, 130, 246, 0.35); }
+  to { background: rgba(59, 130, 246, 0.15); }
+}
+
+.cell-flash {
+  animation: cellFlash 0.4s ease-out;
+}
+
+@keyframes cellFlash {
+  0% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+.edge-draw {
+  stroke-dashoffset: 1000;
+  animation: edgeDraw 0.5s ease-out forwards;
+}
+
+@keyframes edgeDraw {
+  to { stroke-dashoffset: 0; }
+}
