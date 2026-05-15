@@ -81,7 +81,6 @@ export interface DPTableState {
   highlights: { row: number; col: number; color: HighlightColor }[];
   rowLabels?: string[];
   colLabels?: string[];
-  /** When true, render as a single horizontal array instead of a 2-D table */
   is1D?: boolean;
   dpArray?: (number | string)[];
 }
@@ -89,7 +88,6 @@ export interface DPTableState {
 export interface HeapState {
   data: number[];
   highlights: CellHighlight[];
-  /** Index from which elements are already sorted (shown in lime green) */
   sortedFrom?: number;
 }
 
@@ -107,13 +105,34 @@ export interface CallStackFrame {
   highlight?: HighlightColor;
 }
 
+// ─── Linked List ──────────────────────────────────────────────────────────────
+export interface LinkedListState {
+  /** Values in order from head to tail */
+  nodes: (number | string | null)[];
+  /** Index of the node currently being pointed to (e.g. curr, node, ptr) */
+  activeIndex?: number;
+  /** Named pointer labels on specific node indices */
+  pointers?: { index: number; label: string; color: string }[];
+}
+
+// ─── Graph (adjacency-list representation) ────────────────────────────────────
+export interface GraphVizState {
+  /** All node labels */
+  nodes: string[];
+  /** Directed or undirected edge pairs */
+  edges: { from: string; to: string }[];
+  directed: boolean;
+  /** Per-node highlight colours (key = node label) */
+  nodeHighlights?: Record<string, HighlightColor>;
+}
+
 // ─── Frame ────────────────────────────────────────────────────────────────────
 /**
  * A single execution step.  Every field except `line` and `description` is
  * optional — only the fields relevant to the current algorithm are populated.
  */
 export interface Frame {
-  /** Line number in the reference JavaScript code (mapped to other languages via lineMap) */
+  /** Line number in the reference JavaScript code */
   line: number;
   description: string;
   /** Scalar / primitive variable values shown in the description bar */
@@ -121,6 +140,8 @@ export interface Frame {
   arrays?: ArrayState[];
   matrix?: MatrixState;
   tree?: TreeState;
+  linkedList?: LinkedListState;
+  graph?: GraphVizState;
   dpTable?: DPTableState;
   heap?: HeapState;
   hashmap?: HashMapState;
@@ -142,11 +163,6 @@ export type AlgorithmCategory =
   | 'dp-1d'
   | 'dp-2d';
 
-/**
- * Per-language line-number translation table.
- * Maps a frame's JS `line` → the equivalent line in the target language.
- * Lines without an entry fall back to no highlight.
- */
 export type LineMap = Partial<Record<Language, Record<number, number>>>;
 
 export interface Algorithm {

@@ -1,36 +1,38 @@
 /**
  * JavaScript / TypeScript execution engine.
  *
- * Babel standalone is loaded lazily (dynamic import) so it never bloats the
- * initial bundle — it only downloads when the user first opens Custom mode.
+ * Babel standalone is loaded lazily (dynamic import) — only downloaded when
+ * Custom mode is first opened (~3 MB gzip, cached after first load).
  *
  * Pipeline:
- *   1. Lazy-load @babel/standalone (~3MB, cached after first import).
- *   2. Strip TypeScript types if needed (preset-typescript).
- *   3. Instrument AST: inject __step__(lineNum, {varSnapshot}) at key statements.
- *   4. Execute with new Function(); __step__ accumulates Frame objects.
- *   5. detectVisualization() maps each snapshot to the right viz type.
+ *   1. Babel parse + plugin transforms the AST:
+ *      a. __push__(funcName, args) at every function entry
+ *      b. __pop__() in a try/finally around every function body
+ *         (guarantees the frame is popped even on exception or implicit return)
+ *      c. __step__(line, vars) after every key statement
+ *   2. Instrumented code runs via new Function(); the three injected helpers
+ *      accumulate frames with full call-stack snapshots.
+ *   3. detectVisualization() maps each var snapshot to the right viz type.
  *
- * Safety: STEP_LIMIT prevents infinite loops from hanging the tab.
+ * Safety: STEP_LIMIT prevents infinite loops; new Function() gives an isolated
+ * scope with no access to the module's own variables.
  */
 
-import type { Frame } from '../types';
-import { detectVisualization, safeClone } from './variableDetector';
+import type { Frame, CallStackFrame } from '../types';
+import { detectVisualization, safeClone, resetTreeIds } from './variableDetector';
 
 const STEP_LIMIT = 3000;
 
 // ─── Lazy Babel singleton ─────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let babelCache: any | null = null;
-
+let babelCache: any = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getBabel(): Promise<any> {
-  if (babelCache) return babelCache;
-  babelCache = await import('@babel/standalone');
+  if (!babelCache) babelCache = await import('@babel/standalone');
   return babelCache;
 }
 
-// ─── Babel instrumentation plugin ─────────────────────────────────────────────
+// ─── Babel plugin ─────────────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function makePlugin({ types: t }: { types: any }) {
   const done = new WeakSet();
@@ -44,8 +46,13 @@ function makePlugin({ types: t }: { types: any }) {
       s = s.parent ?? null;
       if (!s?.parent) break;
     }
-    return [...new Set(names)].filter(n => !n.startsWith('_') && n !== '__step__');
+    return [...new Set(names)].filter(
+      n => !n.startsWith('_') && n !== '__step__' && n !== '__push__' && n !== '__pop__'
+    );
   }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ln = (node: any): number => node?.loc?.start?.line ?? 0;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function mkStep(line: number, vars: string[]): any {
@@ -53,7 +60,9 @@ function makePlugin({ types: t }: { types: any }) {
       t.callExpression(t.identifier('__step__'), [
         t.numericLiteral(line),
         t.objectExpression(
-          vars.map((n: string) => t.objectProperty(t.identifier(n), t.identifier(n), false, true))
+          vars.map((n: string) =>
+            t.objectProperty(t.identifier(n), t.identifier(n), false, true)
+          )
         ),
       ])
     );
@@ -62,21 +71,72 @@ function makePlugin({ types: t }: { types: any }) {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const ln = (node: any): number => node?.loc?.start?.line ?? 0;
+  function mkPush(funcName: string, line: number, params: string[]): any {
+    const node = t.expressionStatement(
+      t.callExpression(t.identifier('__push__'), [
+        t.stringLiteral(funcName),
+        t.numericLiteral(line),
+        t.objectExpression(
+          params.map((n: string) =>
+            t.objectProperty(t.identifier(n), t.identifier(n), false, true)
+          )
+        ),
+      ])
+    );
+    done.add(node);
+    return node;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function mkPop(): any {
+    const node = t.expressionStatement(
+      t.callExpression(t.identifier('__pop__'), [])
+    );
+    done.add(node);
+    return node;
+  }
 
   return {
     visitor: {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      'FunctionDeclaration|FunctionExpression|ArrowFunctionExpression'(path: any) {
-        if (done.has(path.node)) return;
-        done.add(path.node);
-        const params: string[] = (path.node.params ?? [])
-          .filter((p: { type: string }) => p.type === 'Identifier')
-          .map((p: { name: string }) => p.name);
-        if (!params.length || !path.node.body?.body) return;
-        path.node.body.body.unshift(mkStep(ln(path.node), params));
+      // ── Function: wrap body with __push__ entry + try/finally __pop__ exit ──
+      'FunctionDeclaration|FunctionExpression|ArrowFunctionExpression': {
+        // Use exit so inner statements already have __step__ injected before we wrap
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        exit(path: any) {
+          if (done.has(path.node)) return;
+          done.add(path.node);
+
+          const body = path.node.body;
+          if (!body?.body) return; // expression arrow — skip
+
+          // Resolve function name
+          const funcName: string =
+            path.node.id?.name ??
+            path.parent?.id?.name ??
+            path.parent?.key?.name ??
+            'anonymous';
+
+          const params: string[] = (path.node.params ?? [])
+            .filter((p: { type: string }) => p.type === 'Identifier')
+            .map((p: { name: string }) => p.name);
+
+          const pushNode = mkPush(funcName, ln(path.node), params);
+          const popNode  = mkPop();
+
+          // Wrap the existing body in try/finally
+          const tryStmt = t.tryStatement(
+            t.blockStatement([...body.body]),
+            null,
+            t.blockStatement([popNode])
+          );
+          done.add(tryStmt);
+          done.add(popNode);
+
+          body.body = [pushNode, tryStmt];
+        },
       },
 
+      // ── Variable declarations ──────────────────────────────────────────────
       VariableDeclaration: {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         exit(path: any) {
@@ -91,6 +151,7 @@ function makePlugin({ types: t }: { types: any }) {
         },
       },
 
+      // ── Expression statements (assignments, .push(), etc.) ─────────────────
       ExpressionStatement: {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         exit(path: any) {
@@ -102,12 +163,14 @@ function makePlugin({ types: t }: { types: any }) {
         },
       },
 
+      // ── Return statements ──────────────────────────────────────────────────
       ReturnStatement: {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         enter(path: any) {
           if (done.has(path.node)) return;
           done.add(path.node);
           path.insertBefore(mkStep(ln(path.node), scopeVars(path.scope)));
+          // __pop__ is handled by the try/finally; don't double-insert here
         },
       },
     },
@@ -123,7 +186,7 @@ export interface RunResult {
 export async function runJavaScript(code: string, isTypeScript = false): Promise<RunResult> {
   const Babel = await getBabel();
 
-  // ── 1. Transform ────────────────────────────────────────────────────────
+  // ── 1. Transform ────────────────────────────────────────────────────────────
   let instrumented: string;
   try {
     const result = Babel.transform(code, {
@@ -137,28 +200,57 @@ export async function runJavaScript(code: string, isTypeScript = false): Promise
     return { frames: [], error: `Parse error: ${(err as Error).message}` };
   }
 
-  // ── 2. Execute ──────────────────────────────────────────────────────────
-  const frames: Frame[] = [];
-  let stepCount = 0;
+  // ── 2. Execute ──────────────────────────────────────────────────────────────
+  resetTreeIds();
+  const frames:    Frame[]            = [];
+  const callStack: CallStackFrame[]   = [];
+  let   depth                         = 0;
+  let   frameSeq                      = 0;
+  let   stepCount                     = 0;
+
+  function __push__(funcName: string, _line: number, args: Record<string, unknown>) {
+    callStack.push({
+      id:       `${funcName}-${frameSeq++}`,
+      funcName,
+      args:     safeClone(args) as Record<string, unknown>,
+      isActive: true,
+      depth:    depth++,
+    });
+  }
+
+  function __pop__() {
+    depth = Math.max(0, depth - 1);
+    const top = callStack[callStack.length - 1];
+    if (top) {
+      top.isActive = false;
+      callStack.pop();
+    }
+  }
 
   function __step__(lineNum: number, vars: Record<string, unknown>) {
     if (++stepCount > STEP_LIMIT) {
       throw new Error(`Step limit of ${STEP_LIMIT} reached — possible infinite loop.`);
     }
+
     const snapped: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(vars)) {
-      try { snapped[k] = safeClone(v); }
-      catch { snapped[k] = String(v); }
+      try { snapped[k] = safeClone(v); } catch { snapped[k] = String(v); }
     }
+
+    const vizFields = detectVisualization(snapped);
+
     frames.push({
-      line: lineNum,
+      line:        lineNum,
       description: buildDesc(lineNum, snapped),
-      ...detectVisualization(snapped),
+      callStack:   callStack.length > 0
+        ? callStack.map(f => ({ ...f }))
+        : undefined,
+      ...vizFields,
     });
   }
 
   try {
-    new Function('__step__', instrumented)(__step__);
+    new Function('__step__', '__push__', '__pop__', instrumented)(__step__, __push__, __pop__);
   } catch (err) {
     const msg = (err as Error).message;
     return { frames, error: msg.includes('Step limit') ? msg : `Runtime error: ${msg}` };
