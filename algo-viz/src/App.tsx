@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Menu, X, Info } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import Sidebar from './components/layout/Sidebar';
 import CodePanel from './components/layout/CodePanel';
 import PlaybackControls from './components/layout/PlaybackControls';
@@ -41,11 +41,15 @@ export default function App() {
           </div>
         )}
 
-        {/* Description badge */}
-        {selectedAlgorithm && (
-          <div className="hidden lg:flex items-center gap-1.5 text-xs text-slate-500 max-w-xs truncate">
-            <Info size={12} />
-            <span className="truncate">{selectedAlgorithm.description}</span>
+        {/* Complexity badges */}
+        {selectedAlgorithm?.complexity && (
+          <div className="hidden lg:flex items-center gap-2">
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-slate-700 text-slate-400">
+              Time <span className="font-bold" style={{ color: "#f97316" }}>{selectedAlgorithm.complexity.time}</span>
+            </span>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-slate-700 text-slate-400">
+              Space <span className="font-bold" style={{ color: "#22c55e" }}>{selectedAlgorithm.complexity.space}</span>
+            </span>
           </div>
         )}
       </header>

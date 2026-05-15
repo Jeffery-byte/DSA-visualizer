@@ -1,21 +1,18 @@
 import { create } from 'zustand';
-import type { Frame, Algorithm } from '../types';
+import type { Frame, Algorithm, Language } from '../types';
 import { allAlgorithms } from '../algorithms';
 
 interface VisualizationStore {
-  // Selected algorithm
   selectedAlgorithm: Algorithm | null;
   frames: Frame[];
   currentFrameIndex: number;
 
-  // Playback state
   isPlaying: boolean;
-  speed: number; // ms between frames
+  speed: number;
 
-  // UI state
+  selectedLanguage: Language;
   sidebarOpen: boolean;
 
-  // Actions
   selectAlgorithm: (algo: Algorithm) => void;
   setFrames: (frames: Frame[]) => void;
   goToFrame: (index: number) => void;
@@ -25,6 +22,7 @@ interface VisualizationStore {
   setSpeed: (speed: number) => void;
   reset: () => void;
   toggleSidebar: () => void;
+  setLanguage: (lang: Language) => void;
 }
 
 export const useStore = create<VisualizationStore>((set, get) => ({
@@ -33,6 +31,7 @@ export const useStore = create<VisualizationStore>((set, get) => ({
   currentFrameIndex: 0,
   isPlaying: false,
   speed: 600,
+  selectedLanguage: 'javascript',
   sidebarOpen: true,
 
   selectAlgorithm: (algo) => {
@@ -69,4 +68,6 @@ export const useStore = create<VisualizationStore>((set, get) => ({
   reset: () => set({ currentFrameIndex: 0, isPlaying: false }),
 
   toggleSidebar: () => set(s => ({ sidebarOpen: !s.sidebarOpen })),
+
+  setLanguage: (lang) => set({ selectedLanguage: lang }),
 }));

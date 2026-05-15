@@ -21,6 +21,15 @@ export type HighlightColor =
   | 'result'
   | 'excluded';
 
+export type Language = 'javascript' | 'typescript' | 'python' | 'java' | 'c';
+
+export interface Complexity {
+  time: string;
+  space: string;
+  /** Full explanation of why these complexities hold */
+  reasoning: string;
+}
+
 export interface CellHighlight {
   index: number;
   color: HighlightColor;
@@ -151,12 +160,25 @@ export type AlgorithmCategory =
   | 'dp-1d'
   | 'dp-2d';
 
+/**
+ * Maps a frame's JS line number → the equivalent line in the target language.
+ * Unmapped lines fall back to no highlight.
+ */
+export type LineMap = Partial<Record<Language, Record<number, number>>>;
+
 export interface Algorithm {
   id: string;
   name: string;
   category: AlgorithmCategory;
   description: string;
-  code: string;
+  complexity: Complexity;
+  /** Code listing for every supported language */
+  codes: Record<Language, string>;
+  /**
+   * Maps frame.line (JavaScript reference) → line number in each language.
+   * javascript and typescript always identity-map unless specified.
+   */
+  lineMap?: LineMap;
   defaultInput?: Record<string, unknown>;
   generate: (input: Record<string, unknown>) => Frame[];
 }
